@@ -322,9 +322,27 @@ function todayRange() {
 // ─── Sync from hash ───────────────────────────────────────────────────────────
 
 async function processSyncHash() {
+  // Method 1: data passed via localStorage (preferred — no URL length limit)
+  const stored = localStorage.getItem("betlensSync");
+  if (stored) {
+    localStorage.removeItem("betlensSync");
+    showToast("⏳ Importing bets…");
+    try {
+      const bets = JSON.parse(stored);
+      await saveBets(bets);
+      localStorage.setItem("betlensLastSync", Date.now());
+      showToast(`✅ ${bets.length} bets synced!`);
+      return true;
+    } catch (err) {
+      showToast("❌ Sync failed — try again");
+      console.error(err);
+      return false;
+    }
+  }
+
+  // Method 2: fallback — data in URL hash (may fail for large datasets)
   const hash = location.hash;
   if (!hash.startsWith("#sync=")) return false;
-
   showToast("⏳ Importing bets…");
   try {
     const encoded = hash.slice(6);
@@ -332,6 +350,7 @@ async function processSyncHash() {
     const bets = JSON.parse(json);
     await saveBets(bets);
     location.hash = "";
+    localStorage.setItem("betlensLastSync", Date.now());
     showToast(`✅ ${bets.length} bets synced!`);
     return true;
   } catch (err) {
@@ -412,8 +431,8 @@ msg("BetLens: fetching bets…");
     }
   }
   msg("✅ "+bets.length+" bets found!\\nOpening BetLens…");
-  var enc=btoa(encodeURIComponent(JSON.stringify(bets)));
-  setTimeout(function(){window.location.href=PWA+"#sync="+enc;},1200);
+  try{localStorage.setItem("betlensSync",JSON.stringify(bets));}catch(e){}
+  setTimeout(function(){window.location.href=PWA;},1200);
 })();
 })();`;
   return "javascript:" + encodeURIComponent(code);
@@ -519,15 +538,28 @@ async function init() {
       <strong>To sync:</strong> Open SportyBet, log in, tap the bookmark.<br><br>
       <small>Your data stays on your phone. Nothing is sent to any server.</small>`;
 
-    bmWrap.innerHTML = `
-      <button class="bm-btn" id="copyBmBtn" style="width:100%;margin-bottom:10px">📋 Copy bookmarklet code</button>
-      <textarea id="bmCodeBox" readonly style="
-        width:100%;padding:10px;border-radius:10px;
-        background:var(--surface2);border:1px solid var(--border);
-        color:var(--muted);font-family:'JetBrains Mono',monospace;
-        font-size:9px;resize:none;height:56px;line-height:1.5;display:block;
-      ">${bmCode}</textarea>
-      <p class="bm-note" id="copyNote" style="margin-top:8px">Long-press the text above to select & copy if button doesn't work</p>`;
+    // Build elements manually so bmCode special chars don't break innerHTML
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "bm-btn";
+    copyBtn.id = "copyBmBtn";
+    copyBtn.style = "width:100%;margin-bottom:10px";
+    copyBtn.textContent = "📋 Copy bookmarklet code";
+
+    const codeBox = document.createElement("textarea");
+    codeBox.id = "bmCodeBox";
+    codeBox.readOnly = true;
+    codeBox.value = bmCode;
+    codeBox.style.cssText = "width:100%;padding:10px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:9px;resize:none;height:56px;line-height:1.5;display:block;";
+
+    const note = document.createElement("p");
+    note.className = "bm-note";
+    note.id = "copyNote";
+    note.style.marginTop = "8px";
+    note.textContent = "Long-press the text above to select & copy if button doesn't work";
+
+    bmWrap.appendChild(copyBtn);
+    bmWrap.appendChild(codeBox);
+    bmWrap.appendChild(note);
 
     document.getElementById("copyBmBtn").addEventListener("click", () => {
       navigator.clipboard.writeText(bmCode).then(() => {
