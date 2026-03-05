@@ -380,52 +380,63 @@ function exportCSV() {
 
 function buildBookmarklet(pwaUrl) {
   const code = `(function(){
-var PWA="${pwaUrl}";
-var PS=50;
-async function fp(pg,is){
-  var r=await fetch("https://www.sportybet.com/api/ng/orders/order/v2/realbetlist?isSettled="+is+"&pageSize="+PS+"&pageNo="+pg+"&_t="+Date.now(),{credentials:"include"});
-  var d=await r.json();
-  if(d.bizCode!==10000)throw new Error(d.message);
-  return d.data;
+"use strict";
+var BL_PWA="${pwaUrl}";
+var BL_PS=50;
+async function blFetch(pageNo,settled){
+  var resp=await fetch("https://www.sportybet.com/api/ng/orders/order/v2/realbetlist?isSettled="+settled+"&pageSize="+BL_PS+"&pageNo="+pageNo+"&_t="+Date.now(),{credentials:"include"});
+  var json=await resp.json();
+  if(json.bizCode!==10000)throw new Error(json.message||"API error");
+  return json.data;
 }
-function ms(ws){return ws===20?"win":ws===30?"loss":(ws===40||ws===50)?"void":"pending";}
-function po(o){
-  var s=parseFloat(o.totalStake)||0,r=parseFloat(o.totalWinnings)||0;
-  var legs=(o.selections||[]).map(function(x){return(x.home||"?")+" v "+(x.away||"?");});
+function blStatus(ws){return ws===20?"win":ws===30?"loss":(ws===40||ws===50)?"void":"pending";}
+function blParse(order){
+  var stake=parseFloat(order.totalStake)||0;
+  var ret=parseFloat(order.totalWinnings)||0;
+  var legs=(order.selections||[]).map(function(sel){return(sel.home||"?")+" v "+(sel.away||"?");});
   var nm=legs.length===0?"Unknown":legs.length===1?legs[0]:legs[0]+" +"+(legs.length-1);
-  var odds=(o.selections||[]).reduce(function(a,x){var v=parseFloat(x.odds);return isNaN(v)?a:a*v;},1);
-  return{orderId:o.shortId||o.orderId||"",name:nm,odds:odds.toFixed(2),stake:s,ret:r,
-    status:ms(o.winningStatus),date:o.createTime?new Date(o.createTime).toISOString():null,
-    isAcca:(o.selectionSize||1)>1,selectionSize:o.selectionSize||1};
+  var combinedOdds=(order.selections||[]).reduce(function(acc,sel){var v=parseFloat(sel.odds);return isNaN(v)?acc:acc*v;},1);
+  return{orderId:order.shortId||order.orderId||"",name:nm,odds:combinedOdds.toFixed(2),
+    stake:stake,ret:ret,status:blStatus(order.winningStatus),
+    date:order.createTime?new Date(order.createTime).toISOString():null,
+    isAcca:(order.selectionSize||1)>1};
 }
-var el=document.createElement("div");
-el.style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111;color:#00e5a0;font-family:monospace;font-size:14px;padding:20px 28px;border-radius:12px;z-index:999999;border:1px solid #00e5a0;min-width:220px;text-align:center;box-shadow:0 0 40px rgba(0,229,160,0.2)";
-el.id="bl-overlay";document.body.appendChild(el);
-function msg(t){el.textContent=t;}
-msg("BetLens: fetching bets…");
+var blEl=document.createElement("div");
+blEl.style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111318;color:#00e5a0;font-family:monospace;font-size:14px;padding:20px 28px;border-radius:12px;z-index:2147483647;border:1px solid #00e5a0;min-width:240px;text-align:center;box-shadow:0 0 40px rgba(0,229,160,0.2)";
+document.body.appendChild(blEl);
+function blMsg(txt){blEl.textContent=txt;}
+blMsg("BetLens: connecting…");
 (async function(){
-  var bets=[];
-  for(var is of[10,0]){
-    var pg=1,total=1;
-    while(pg<=total){
-      msg("Fetching page "+pg+"…");
-      try{
-        var page=await fp(pg,is);
-        total=Math.ceil((page.totalNum||0)/PS)||1;
-        for(var o of(page.entityList||[]))bets.push(po(o));
-      }catch(e){msg("Error: "+e.message);setTimeout(function(){el.remove();},3000);return;}
-      pg++;
-      if(pg<=total)await new Promise(function(r){setTimeout(r,250);});
+  try{
+    var allBets=[];
+    var settledTypes=[10,0];
+    for(var si=0;si<settledTypes.length;si++){
+      var settled=settledTypes[si];
+      var pageNo=1;
+      var totalPages=1;
+      while(pageNo<=totalPages){
+        blMsg("Fetching page "+pageNo+" of "+totalPages+"…");
+        var pageData=await blFetch(pageNo,settled);
+        totalPages=Math.ceil((pageData.totalNum||0)/BL_PS)||1;
+        var items=pageData.entityList||[];
+        for(var ii=0;ii<items.length;ii++){allBets.push(blParse(items[ii]));}
+        pageNo++;
+        if(pageNo<=totalPages){await new Promise(function(resolve){setTimeout(resolve,250);});}
+      }
     }
+    blMsg("✅ "+allBets.length+" bets found! Opening BetLens…");
+    var slim=allBets.map(function(b){return{i:b.orderId,n:b.name,o:b.odds,s:b.stake,r:b.ret,t:b.status,d:b.date,a:b.isAcca?1:0};});
+    var enc=btoa(unescape(encodeURIComponent(JSON.stringify(slim))));
+    setTimeout(function(){window.location.href=BL_PWA+"#sync="+enc;},1500);
+  }catch(err){
+    blMsg("\u274C Error: "+err.message);
+    setTimeout(function(){blEl.remove();},4000);
   }
-  msg("✅ "+bets.length+" bets found!\\nOpening BetLens…");
-  var slim=bets.map(function(b){return{i:b.orderId,n:b.name,o:b.odds,s:b.stake,r:b.ret,t:b.status,d:b.date,a:b.isAcca?1:0};});
-  var enc=btoa(unescape(encodeURIComponent(JSON.stringify(slim))));
-  setTimeout(function(){window.location.href=PWA+"#sync="+enc;},1200);
 })();
 })();`;
   return "javascript:" + encodeURIComponent(code);
 }
+
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -494,6 +505,28 @@ async function init() {
     calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
     renderCalendar(computeStats(allBets, activeFrom, activeTo).bets);
   });
+
+  // Theme toggle
+  const themeToggle = document.getElementById("themeToggle");
+  const savedTheme = localStorage.getItem("betlensTheme") || "dark";
+  applyTheme(savedTheme);
+
+  function applyTheme(theme) {
+    document.body.classList.toggle("light", theme === "light");
+    if (themeToggle) themeToggle.textContent = theme === "light" ? "🌙" : "☀️";
+    // Update PWA theme-color meta tag
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === "light" ? "#f0f2f7" : "#0a0b0d";
+  }
+
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const isLight = document.body.classList.contains("light");
+      const next = isLight ? "dark" : "light";
+      applyTheme(next);
+      localStorage.setItem("betlensTheme", next);
+    });
+  }
 
   // Export
   document.getElementById("exportBtn").addEventListener("click", exportCSV);

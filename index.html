@@ -28,6 +28,19 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
 }
+body.light {
+  --bg:       #f0f2f7;
+  --surface:  #ffffff;
+  --surface2: #e8edf5;
+  --border:   #d0d6e4;
+  --text:     #0e1117;
+  --muted:    #8890a8;
+  --green:    #00a374;
+  --green-dim:rgba(0,163,116,0.1);
+  --red:      #d93252;
+  --red-dim:  rgba(217,50,82,0.1);
+  --yellow:   #c49a00;
+}
 
 html, body {
   height: 100%;
@@ -589,6 +602,12 @@ canvas#sparkline {
       <span class="logo-name">BetLens</span>
     </div>
     <div class="header-right">
+      <button id="themeToggle" style="
+        background:var(--surface2);border:1px solid var(--border);
+        border-radius:8px;width:32px;height:32px;font-size:16px;
+        cursor:pointer;display:flex;align-items:center;justify-content:center;
+        transition:all 0.15s;
+      " title="Toggle theme">🌙</button>
       <div class="status-dot"></div>
       <span class="last-sync" id="lastSync">—</span>
     </div>
