@@ -322,32 +322,20 @@ function todayRange() {
 // ─── Sync from hash ───────────────────────────────────────────────────────────
 
 async function processSyncHash() {
-  // Method 1: data passed via localStorage (preferred — no URL length limit)
-  const stored = localStorage.getItem("betlensSync");
-  if (stored) {
-    localStorage.removeItem("betlensSync");
-    showToast("⏳ Importing bets…");
-    try {
-      const bets = JSON.parse(stored);
-      await saveBets(bets);
-      localStorage.setItem("betlensLastSync", Date.now());
-      showToast(`✅ ${bets.length} bets synced!`);
-      return true;
-    } catch (err) {
-      showToast("❌ Sync failed — try again");
-      console.error(err);
-      return false;
-    }
-  }
-
-  // Method 2: fallback — data in URL hash (may fail for large datasets)
+  // Data arrives via URL hash from bookmarklet
   const hash = location.hash;
   if (!hash.startsWith("#sync=")) return false;
   showToast("⏳ Importing bets…");
   try {
     const encoded = hash.slice(6);
-    const json = decodeURIComponent(atob(encoded));
-    const bets = JSON.parse(json);
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const slim = JSON.parse(json);
+    // Expand slim format back to full bet objects
+    const bets = slim.map(b => ({
+      orderId: b.i, name: b.n, odds: b.o,
+      stake: b.s, ret: b.r, status: b.t,
+      date: b.d, isAcca: b.a === 1,
+    }));
     await saveBets(bets);
     location.hash = "";
     localStorage.setItem("betlensLastSync", Date.now());
@@ -431,8 +419,9 @@ msg("BetLens: fetching bets…");
     }
   }
   msg("✅ "+bets.length+" bets found!\\nOpening BetLens…");
-  try{localStorage.setItem("betlensSync",JSON.stringify(bets));}catch(e){}
-  setTimeout(function(){window.location.href=PWA;},1200);
+  var slim=bets.map(function(b){return{i:b.orderId,n:b.name,o:b.odds,s:b.stake,r:b.ret,t:b.status,d:b.date,a:b.isAcca?1:0};});
+  var enc=btoa(unescape(encodeURIComponent(JSON.stringify(slim))));
+  setTimeout(function(){window.location.href=PWA+"#sync="+enc;},1200);
 })();
 })();`;
   return "javascript:" + encodeURIComponent(code);
