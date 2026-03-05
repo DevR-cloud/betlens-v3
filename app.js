@@ -508,21 +508,19 @@ async function init() {
 
   // Theme toggle
   const themeToggle = document.getElementById("themeToggle");
-  const savedTheme = localStorage.getItem("betlensTheme") || "dark";
-  applyTheme(savedTheme);
 
   function applyTheme(theme) {
     document.body.classList.toggle("light", theme === "light");
     if (themeToggle) themeToggle.textContent = theme === "light" ? "🌙" : "☀️";
-    // Update PWA theme-color meta tag
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === "light" ? "#f0f2f7" : "#0a0b0d";
   }
 
+  applyTheme(localStorage.getItem("betlensTheme") || "dark");
+
   if (themeToggle) {
     themeToggle.addEventListener("click", () => {
-      const isLight = document.body.classList.contains("light");
-      const next = isLight ? "dark" : "light";
+      const next = document.body.classList.contains("light") ? "dark" : "light";
       applyTheme(next);
       localStorage.setItem("betlensTheme", next);
     });
@@ -540,66 +538,31 @@ async function init() {
     showToast("Data cleared");
   });
 
-  // Bookmarklet setup — build once, inject into Setup tab
-  const pwaUrl = window.location.origin;
-  const bmCode = buildBookmarklet(pwaUrl);
-
-  function setupBookmarkletUI() {
-    const bmInstr = document.getElementById("bmInstructions");
-    const bmWrap  = document.getElementById("bmBtnWrap");
-    if (!bmInstr || !bmWrap) return;
-
+  // Sync page setup
+  const bmInstr = document.getElementById("bmInstructions");
+  const bmWrap  = document.getElementById("bmBtnWrap");
+  if (bmInstr) {
     bmInstr.innerHTML =
-      `<strong>How to set up (Android Chrome):</strong><br><br>
-      1. Tap <strong>"Copy code"</strong> below<br>
-      2. Go to <strong>google.com</strong> in Chrome<br>
-      3. Tap ⋮ → <strong>Add to bookmarks</strong> → Save<br>
-      4. Tap ⋮ → <strong>Bookmarks</strong> → find it → tap ✏️ Edit<br>
-      5. <strong>Delete the URL</strong> and paste the copied code<br>
-      6. Save — done ✅<br><br>
-      <strong>To sync:</strong> Open SportyBet, log in, tap the bookmark.<br><br>
-      <small>Your data stays on your phone. Nothing is sent to any server.</small>`;
-
-    // Build elements manually so bmCode special chars don't break innerHTML
-    const copyBtn = document.createElement("button");
-    copyBtn.className = "bm-btn";
-    copyBtn.id = "copyBmBtn";
-    copyBtn.style = "width:100%;margin-bottom:10px";
-    copyBtn.textContent = "📋 Copy bookmarklet code";
-
-    const codeBox = document.createElement("textarea");
-    codeBox.id = "bmCodeBox";
-    codeBox.readOnly = true;
-    codeBox.value = bmCode;
-    codeBox.style.cssText = "width:100%;padding:10px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:9px;resize:none;height:56px;line-height:1.5;display:block;";
-
+      `<strong>How to sync:</strong><br><br>
+      1. Log into <strong>SportyBet</strong> in this browser<br>
+      2. Come back here and tap <strong>"Sync Bets"</strong> below<br>
+      3. Your bets load automatically ✅<br><br>
+      <small>Your data stays on your phone. Nothing is sent anywhere.</small>`;
+  }
+  if (bmWrap) {
+    const syncLink = document.createElement("a");
+    syncLink.href = "/sync.html";
+    syncLink.className = "bm-btn";
+    syncLink.style.cssText = "display:block;text-align:center;text-decoration:none;width:100%;padding:14px;background:var(--green);color:#000;border-radius:12px;font-weight:700;font-size:15px;";
+    syncLink.textContent = "⚡ Sync Bets";
     const note = document.createElement("p");
     note.className = "bm-note";
-    note.id = "copyNote";
-    note.style.marginTop = "8px";
-    note.textContent = "Long-press the text above to select & copy if button doesn't work";
-
-    bmWrap.appendChild(copyBtn);
-    bmWrap.appendChild(codeBox);
+    note.style.marginTop = "10px";
+    note.textContent = "Make sure you're logged into SportyBet first";
+    bmWrap.appendChild(syncLink);
     bmWrap.appendChild(note);
-
-    document.getElementById("copyBmBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(bmCode).then(() => {
-        document.getElementById("copyBmBtn").textContent = "✅ Copied!";
-        document.getElementById("copyNote").textContent = "Now follow the steps above to save as a bookmark";
-        setTimeout(() => {
-          document.getElementById("copyBmBtn").textContent = "📋 Copy bookmarklet code";
-        }, 3000);
-      }).catch(() => {
-        const box = document.getElementById("bmCodeBox");
-        box.focus(); box.select();
-        document.getElementById("copyNote").textContent = "Text selected — now tap Copy";
-      });
-    });
   }
 
-  // Run immediately (Setup tab may already be visible)
-  setupBookmarkletUI();
 
   // Check for sync hash first
   const synced = await processSyncHash();
